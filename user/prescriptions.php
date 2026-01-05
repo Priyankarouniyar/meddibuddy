@@ -1,13 +1,24 @@
 <?php
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
+
 require_once '../config/database.php';
 require_once '../includes/functions.php';
 
 requireLogin();
-if(isAdmin()) redirect('../auth/login.php');
 
 $userId = $_SESSION['user_id'];
 $success = '';
 $error = '';
+
+// Create uploads directory if it doesn't exist
+$uploads_dir = '../uploads/prescriptions';
+if(!is_dir($uploads_dir)) {
+    if(!mkdir($uploads_dir, 0755, true)) {
+        $error = "Warning: Could not create uploads directory. File upload may fail.";
+    }
+}
 
 // Handle Add Prescription
 if($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'add_prescription') {
@@ -15,12 +26,39 @@ if($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['a
     $doctor_name = sanitize($_POST['doctor_name']);
     $prescription_date = $_POST['prescription_date'];
     $description = sanitize($_POST['description']);
+    $prescription_file = '';
+
+    if(isset($_FILES['prescription_file']) && $_FILES['prescription_file']['size'] > 0) {
+        $file = $_FILES['prescription_file'];
+        $allowed = ['pdf', 'jpg', 'jpeg', 'png', 'doc', 'docx', 'bmp', 'gif'];
+        $filename = basename($file['name']);
+        $file_ext = strtolower(pathinfo($filename, PATHINFO_EXTENSION));
+
+        if(!in_array($file_ext, $allowed)) {
+            $error = "Invalid file type. Only PDF, JPG, PNG, DOC, DOCX are allowed.";
+        } elseif($file['size'] > 5242880) { // 5MB
+            $error = "File size exceeds 5MB limit.";
+        } elseif($file['error'] !== UPLOAD_ERR_OK) {
+            $error = "File upload error: " . $file['error'];
+        } else {
+            $new_filename = uniqid('prescription_') . '.' . $file_ext;
+            $upload_path = $uploads_dir . '/' . $new_filename;
+
+            if(move_uploaded_file($file['tmp_name'], $upload_path)) {
+                chmod($upload_path, 0644);
+                $prescription_file = $new_filename;
+            } else {
+                $error = "Error uploading file. Check folder permissions and disk space.";
+            }
+        }
+    }
 
     if(empty($family_member_id) || empty($doctor_name)) {
         $error = "Please fill in all required fields.";
-    } else {
-        $sql = "INSERT INTO prescriptions (user_id, family_member_id, created_by_user_id, doctor_name, prescription_date, description) 
-                VALUES ('$userId', '$family_member_id', '$userId', '$doctor_name', '$prescription_date', '$description')";
+    } elseif(!$error) {
+        $file_upload_at = $prescription_file ? "NOW()" : "NULL";
+        $sql = "INSERT INTO prescriptions (user_id, family_member_id, created_by_user_id, doctor_name, prescription_date, description, prescription_file, file_uploaded_at) 
+                VALUES ('$userId', '$family_member_id', '$userId', '$doctor_name', '$prescription_date', '$description', '$prescription_file', $file_upload_at)";
         if(mysqli_query($conn, $sql)) {
             $success = "Prescription created successfully!";
         } else {
@@ -53,6 +91,13 @@ if($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['a
 // Handle Delete Prescription
 if(isset($_GET['delete']) && isset($_GET['id'])) {
     $prescription_id = intval($_GET['id']);
+    // Fetch prescription to delete file
+    $result = mysqli_query($conn, "SELECT prescription_file FROM prescriptions WHERE id='$prescription_id' AND user_id='$userId'");
+    if($row = mysqli_fetch_assoc($result)) {
+        if($row['prescription_file'] && file_exists($uploads_dir . '/' . $row['prescription_file'])) {
+            unlink($uploads_dir . '/' . $row['prescription_file']);
+        }
+    }
     // Delete related medicines first
     mysqli_query($conn, "DELETE FROM prescription_medicine WHERE prescription_id='$prescription_id'");
     // Delete prescription
@@ -103,7 +148,7 @@ $prescriptions = mysqli_query($conn, "SELECT * FROM prescriptions WHERE user_id=
         .medicine-form { display: none; margin-top: 1rem; padding: 1rem; background: #f5f5f5; border-radius: 8px; }
         .form-group { margin-bottom: 1rem; }
         .form-group label { display: block; margin-bottom: 0.5rem; font-weight: bold; }
-        .form-group input, .form-group select, .form-group textarea { width: 100%; padding: 0.75rem; border: 1px solid #ddd; border-radius: 4px; }
+        .form-group input, .form-group select, .form-group textarea { width: 100%; padding: 0.75rem; border: 1px solid #ddd; border-radius: 4px; box-sizing: border-box; }
         .prescription-card { background: white; padding: 1.5rem; margin: 1rem 0; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
         .prescription-card h4 { margin: 0 0 0.5rem 0; color: #667eea; }
         .prescription-info { color: #666; font-size: 0.9rem; margin: 0.3rem 0; }
@@ -112,6 +157,13 @@ $prescriptions = mysqli_query($conn, "SELECT * FROM prescriptions WHERE user_id=
         .medicine-table { width: 100%; border-collapse: collapse; margin-top: 0.5rem; }
         .medicine-table td { padding: 0.8rem; border-bottom: 1px solid #eee; }
         .medicine-table th { padding: 0.8rem; background: #f5f5f5; text-align: left; font-weight: bold; }
+        .file-upload-area { border: 2px dashed #667eea; padding: 1.5rem; border-radius: 8px; text-align: center; background: #f9f9ff; cursor: pointer; transition: all 0.3s ease; }
+        .file-upload-area:hover { background: #f0f2ff; border-color: #4c51bf; }
+        .file-upload-area.dragover { background: #e0e7ff; border-color: #4c51bf; }
+        .file-info { color: #666; font-size: 0.85rem; margin-top: 0.5rem; }
+        .uploaded-file { background: #e8f5e9; padding: 0.8rem; border-radius: 4px; margin-top: 0.5rem; display: flex; justify-content: space-between; align-items: center; }
+        .uploaded-file a { color: #667eea; text-decoration: none; }
+        .uploaded-file a:hover { text-decoration: underline; }
     </style>
 </head>
 <body>
@@ -128,7 +180,7 @@ $prescriptions = mysqli_query($conn, "SELECT * FROM prescriptions WHERE user_id=
     <!-- Add Prescription Form -->
     <div class="card" style="margin-bottom: 2rem;">
         <h3>Create New Prescription</h3>
-        <form method="POST">
+        <form method="POST" enctype="multipart/form-data">
             <input type="hidden" name="action" value="add_prescription">
             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
                 <div class="form-group">
@@ -155,6 +207,21 @@ $prescriptions = mysqli_query($conn, "SELECT * FROM prescriptions WHERE user_id=
                 <label>Description/Diagnosis</label>
                 <textarea name="description" placeholder="e.g., Patient has fever and cough. Treat with caution." rows="3"></textarea>
             </div>
+
+            <!-- Added prescription file upload section -->
+            <div class="form-group">
+                <label>Upload Prescription File (Optional)</label>
+                <div class="file-upload-area" id="upload-area">
+                    <input type="file" name="prescription_file" id="prescription_file" style="display: none;" accept=".pdf,.jpg,.jpeg,.png,.doc,.docx,.bmp,.gif">
+                    <div>
+                        <p><strong>📄 Drag and drop your prescription</strong></p>
+                        <p>or click to browse</p>
+                    </div>
+                    <p class="file-info">Supported: PDF, JPG, PNG, DOC, DOCX, BMP, GIF (Max 5MB)</p>
+                </div>
+                <div id="file-preview" style="margin-top: 0.5rem;"></div>
+            </div>
+
             <button type="submit" class="btn btn-primary">Create Prescription</button>
         </form>
     </div>
@@ -181,6 +248,14 @@ $prescriptions = mysqli_query($conn, "SELECT * FROM prescriptions WHERE user_id=
             <?php if($prescription['description']): ?>
                 <div class="prescription-info">
                     <strong>Diagnosis:</strong> <?= htmlspecialchars($prescription['description']) ?>
+                </div>
+            <?php endif; ?>
+
+            <!-- Display uploaded prescription file with download link -->
+            <?php if($prescription['prescription_file'] && file_exists($uploads_dir . '/' . $prescription['prescription_file'])): ?>
+                <div class="uploaded-file">
+                    <span><strong>📎 Prescription Document</strong></span>
+                    <a href="../uploads/prescriptions/<?= urlencode($prescription['prescription_file']) ?>" target="_blank" download>Download</a>
                 </div>
             <?php endif; ?>
 
@@ -273,6 +348,44 @@ $prescriptions = mysqli_query($conn, "SELECT * FROM prescriptions WHERE user_id=
 function toggleMedicineForm(prescriptionId) {
     const form = document.getElementById('medicine-form-' + prescriptionId);
     form.style.display = form.style.display === 'none' ? 'block' : 'none';
+}
+
+const uploadArea = document.getElementById('upload-area');
+const fileInput = document.getElementById('prescription_file');
+const filePreview = document.getElementById('file-preview');
+
+uploadArea.addEventListener('click', () => fileInput.click());
+
+uploadArea.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    uploadArea.classList.add('dragover');
+});
+
+uploadArea.addEventListener('dragleave', () => {
+    uploadArea.classList.remove('dragover');
+});
+
+uploadArea.addEventListener('drop', (e) => {
+    e.preventDefault();
+    uploadArea.classList.remove('dragover');
+    fileInput.files = e.dataTransfer.files;
+    updateFilePreview();
+});
+
+fileInput.addEventListener('change', updateFilePreview);
+
+function updateFilePreview() {
+    filePreview.innerHTML = '';
+    if(fileInput.files.length > 0) {
+        const file = fileInput.files[0];
+        const fileSize = (file.size / 1024).toFixed(2) + ' KB';
+        filePreview.innerHTML = `
+            <div class="uploaded-file">
+                <span>✓ ${file.name} (${fileSize})</span>
+                <button type="button" onclick="document.getElementById('prescription_file').value=''; document.getElementById('file-preview').innerHTML='';">Remove</button>
+            </div>
+        `;
+    }
 }
 </script>
 </body>

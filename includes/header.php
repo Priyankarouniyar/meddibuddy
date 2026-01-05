@@ -1,5 +1,7 @@
 <?php
-session_start();
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
 require_once __DIR__ . '/../config/database.php';
 require_once __DIR__ . '/../includes/functions.php';
 
@@ -37,6 +39,8 @@ if (!isset($noAuthCheck)) {
                     <li><a href="/admin/dashboard.php">Dashboard</a></li>
                     <li><a href="/admin/users.php">Users</a></li>
                     <li><a href="/admin/medicines.php">Medicines</a></li>
+                    <li><a href="/admin/doctors.php">Doctors</a></li>
+                    <li><a href="/admin/drugs.php">Drugs</a></li>
                 <?php else: ?>
                     <li><a href="/user/dashboard.php">Dashboard</a></li>
                     <li><a href="/user/family-members.php">Family</a></li>

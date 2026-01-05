@@ -2,7 +2,7 @@
 require_once '../config/database.php';
 require_once '../includes/functions.php';
 
-if (isLoggedIn()) redirect('../user/dashboard.php');
+// if (isLoggedIn()) redirect('../user/dashboard.php');
 
 $error = '';
 $success = false;

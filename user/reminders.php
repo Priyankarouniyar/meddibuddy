@@ -1,6 +1,7 @@
 <?php
 require_once '../config/database.php';
 require_once '../includes/functions.php';
+require_once '../includes/notification-engine.php';
 
 requireLogin();
 if(isAdmin()) redirect('../auth/login.php');
@@ -25,7 +26,7 @@ if($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['a
         if(mysqli_query($conn, $sql)) {
             $success = "Reminder created successfully!";
         } else {
-            $error = "Error creating reminder.";
+            $error = "Error creating reminder: " . mysqli_error($conn);
         }
     }
 }
@@ -51,21 +52,71 @@ if(isset($_GET['mark']) && isset($_GET['id'])) {
     }
 }
 
-// Fetch family members
-$members = mysqli_query($conn, "SELECT * FROM family_members WHERE user_id='$userId' AND is_active=1 ORDER BY name");
+if(isset($_GET['send_notification']) && isset($_GET['id'])) {
+    $reminder_id = intval($_GET['id']);
+    
+    // Get reminder details with proper error handling
+    $reminder_query = mysqli_query($conn, 
+        "SELECT r.*, pm.dosage, pm.unit, m.name as medicine_name, fm.name as family_member_name, p.user_id
+         FROM reminders r
+         JOIN prescription_medicine pm ON r.prescription_medicine_id = pm.id
+         JOIN medicines m ON pm.medicine_id = m.id
+         JOIN family_members fm ON r.family_member_id = fm.id
+         JOIN prescriptions p ON pm.prescription_id = p.id
+         WHERE r.id = '$reminder_id'");
+    
+    $reminder = $reminder_query ? mysqli_fetch_assoc($reminder_query) : null;
+    
+    if($reminder && $reminder['user_id'] == $userId) {
+        // Get user notification settings with proper error handling
+        $settings_query = mysqli_query($conn, "SELECT * FROM notification_settings WHERE user_id='$userId'");
+        $settings = ($settings_query && mysqli_num_rows($settings_query) > 0) 
+                    ? mysqli_fetch_assoc($settings_query) 
+                    : ['email_enabled' => 1, 'sms_enabled' => 0, 'sms_number' => ''];
+        
+        // Initialize notification engine
+        $notificationEngine = new NotificationEngine($conn);
+        
+        // Send notifications
+        if($settings['email_enabled']) {
+            $notificationEngine->sendEmailNotification(
+                $reminder_id,
+                $userId,
+                $_SESSION['email'],
+                $reminder['medicine_name'],
+                $reminder['family_member_name'],
+                $reminder['dosage'],
+                $reminder['unit'],
+                $reminder['reminder_time']
+            );
+            $success = "Notification sent successfully!";
+        } else {
+            $error = "Email notifications are not enabled. Please enable them in settings.";
+        }
+    } else {
+        $error = "Reminder not found or access denied.";
+    }
+}
+
+// Fetch family members with error handling
+$members_query = mysqli_query($conn, "SELECT * FROM family_members WHERE user_id='$userId' AND is_active=1 ORDER BY name");
 $members_array = [];
-while($m = mysqli_fetch_assoc($members)) {
-    $members_array[$m['id']] = $m['name'];
+if($members_query) {
+    while($m = mysqli_fetch_assoc($members_query)) {
+        $members_array[$m['id']] = $m['name'];
+    }
 }
 
-// Fetch frequencies
-$frequencies = mysqli_query($conn, "SELECT * FROM frequencies ORDER BY times_per_day");
+// Fetch frequencies with error handling
+$frequencies_query = mysqli_query($conn, "SELECT * FROM frequencies ORDER BY times_per_day");
 $frequencies_array = [];
-while($f = mysqli_fetch_assoc($frequencies)) {
-    $frequencies_array[$f['id']] = $f['name'];
+if($frequencies_query) {
+    while($f = mysqli_fetch_assoc($frequencies_query)) {
+        $frequencies_array[$f['id']] = $f['name'];
+    }
 }
 
-// Fetch prescription medicines for the user's family members
+// Fetch prescription medicines for the user's family members with better error handling
 $pm_sql = "SELECT pm.id, pm.dosage, pm.unit, m.name as medicine_name, p.doctor_name, fm.name as family_member_name, fm.id as family_member_id
            FROM prescription_medicine pm
            JOIN medicines m ON pm.medicine_id = m.id
@@ -75,11 +126,13 @@ $pm_sql = "SELECT pm.id, pm.dosage, pm.unit, m.name as medicine_name, p.doctor_n
            ORDER BY fm.name, m.name";
 $pm_result = mysqli_query($conn, $pm_sql);
 $pm_array = [];
-while($pm = mysqli_fetch_assoc($pm_result)) {
-    $pm_array[] = $pm;
+if($pm_result && mysqli_num_rows($pm_result) > 0) {
+    while($pm = mysqli_fetch_assoc($pm_result)) {
+        $pm_array[] = $pm;
+    }
 }
 
-// Fetch reminders
+// Fetch reminders with error handling
 $reminders_sql = "SELECT r.*, pm.dosage, pm.unit, m.name as medicine_name, fm.name as family_member_name, f.name as frequency_name, s.name as status_name
                  FROM reminders r
                  JOIN prescription_medicine pm ON r.prescription_medicine_id = pm.id
@@ -89,6 +142,9 @@ $reminders_sql = "SELECT r.*, pm.dosage, pm.unit, m.name as medicine_name, fm.na
                  JOIN statuses s ON r.status_id = s.id
                  ORDER BY r.reminder_time ASC, fm.name";
 $reminders = mysqli_query($conn, $reminders_sql);
+if(!$reminders) {
+    $error = "Error loading reminders: " . mysqli_error($conn);
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -115,6 +171,7 @@ $reminders = mysqli_query($conn, $reminders_sql);
         .status-active { background: #e7f3ff; color: #0056b3; }
         .status-completed { background: #e8f5e9; color: #2e7d32; }
         .status-paused { background: #fff3e0; color: #e65100; }
+        .no-medicines-warning { background: #fff3cd; border: 1px solid #ffc107; padding: 1rem; border-radius: 4px; margin-bottom: 1rem; }
     </style>
 </head>
 <body>
@@ -127,6 +184,20 @@ $reminders = mysqli_query($conn, $reminders_sql);
     if($success) echo "<div class='alert alert-success'>$success</div>";
     if($error) echo "<div class='alert alert-danger'>$error</div>";
     ?>
+
+    <!-- Added warning message if no medicines are available -->
+    <?php if(count($pm_array) === 0): ?>
+        <div class="no-medicines-warning">
+            <strong>⚠️ No medicines available</strong><br>
+            To create a reminder, you first need to:
+            <ol>
+                <li>Go to <strong>Manage Prescriptions</strong></li>
+                <li>Create a new prescription for a family member</li>
+                <li>Add medicines to that prescription</li>
+                <li>Then come back here to set reminders</li>
+            </ol>
+        </div>
+    <?php endif; ?>
 
     <!-- Add Reminder Button -->
     <button class="btn btn-primary" onclick="toggleReminderForm()" style="margin-bottom: 2rem;">Add New Reminder</button>
@@ -143,11 +214,11 @@ $reminders = mysqli_query($conn, $reminders_sql);
                     <option value="">-- Choose a medicine from your prescriptions --</option>
                     <?php foreach($pm_array as $pm): ?>
                         <option value="<?= $pm['id'] ?>" data-member-id="<?= $pm['family_member_id'] ?>">
-                            <?= htmlspecialchars($pm['medicine_name']) ?> (<?= htmlspecialchars($pm['dosage']) ?><?= htmlspecialchars($pm['unit']) ?>) - <?= htmlspecialchars($pm['family_member_name']) ?>
+                            <?= htmlspecialchars($pm['medicine_name']) ?> (<?= htmlspecialchars($pm['dosage']) ?><?= htmlspecialchars($pm['unit']) ?>) - For <?= htmlspecialchars($pm['family_member_name']) ?>
                         </option>
                     <?php endforeach; ?>
                 </select>
-                <small style="color: #999;">If no medicines appear, add a prescription first.</small>
+                <small style="color: #999;">If no medicines appear, you need to create a prescription first with medicines added to it.</small>
             </div>
 
             <div class="form-group">
@@ -233,6 +304,9 @@ $reminders = mysqli_query($conn, $reminders_sql);
             </div>
 
             <div class="action-buttons">
+                <!-- Add button to manually send notification -->
+                <a href="?send_notification=1&id=<?= $reminder['id'] ?>" class="btn btn-sm" style="background: #667eea; color: white;" title="Send notification now">Send Notification</a>
+                
                 <?php if($reminder['status_name'] !== 'Completed'): ?>
                     <a href="?mark=taken&id=<?= $reminder['id'] ?>" class="btn btn-sm" style="background: #28a745; color: white;">Mark as Taken</a>
                 <?php endif; ?>
