@@ -53,3 +53,8 @@ function showAlert() {
         unset($_SESSION['alert']);
     }
 }
+
+function displayAlert() {
+    showAlert();
+}
+?>

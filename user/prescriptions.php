@@ -2,158 +2,278 @@
 require_once '../config/database.php';
 require_once '../includes/functions.php';
 
-if (!isLoggedIn()) {
-    redirect('../auth/login.php');
-}
+requireLogin();
+if(isAdmin()) redirect('../auth/login.php');
 
 $userId = $_SESSION['user_id'];
+$success = '';
+$error = '';
 
-// Handle form actions
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    if (isset($_POST['action'])) {
-        // ADD PRESCRIPTION
-        if ($_POST['action'] === 'add') {
-            $name = sanitize($_POST['prescription_name']);
-            $description = sanitize($_POST['description']);
-            $imagePath = null;
+// Handle Add Prescription
+if($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'add_prescription') {
+    $family_member_id = intval($_POST['family_member_id']);
+    $doctor_name = sanitize($_POST['doctor_name']);
+    $prescription_date = $_POST['prescription_date'];
+    $description = sanitize($_POST['description']);
 
-            // Handle file upload
-            if (isset($_FILES['prescription_image']) && $_FILES['prescription_image']['error'] === UPLOAD_ERR_OK) {
-                $fileTmpPath = $_FILES['prescription_image']['tmp_name'];
-                $fileName = $_FILES['prescription_image']['name'];
-                $fileSize = $_FILES['prescription_image']['size'];
-                $fileExt = strtolower(pathinfo($fileName, PATHINFO_EXTENSION));
-                $allowedExts = ['jpg','jpeg','png','gif','pdf'];
-
-                if (in_array($fileExt, $allowedExts)) {
-                    if($fileSize <= 2*1024*1024){ // 2MB limit
-                        $newFileName = uniqid('presc_', true) . '.' . $fileExt;
-                        $destPath = '../uploads/prescriptions/' . $newFileName;
-
-                        if (move_uploaded_file($fileTmpPath, $destPath)) {
-                            $imagePath = 'uploads/prescriptions/' . $newFileName;
-                        } else {
-                            setAlert("Failed to upload image.", "danger");
-                        }
-                    } else {
-                        setAlert("File too large. Max 2MB.", "danger");
-                    }
-                } else {
-                    setAlert("Invalid file type. Allowed: jpg, jpeg, png, gif, pdf", "danger");
-                }
-            }
-
-            // Insert into database
-            $insertQuery = "INSERT INTO prescriptions (user_id, name, description, image_path)
-                            VALUES ('$userId', '$name', '$description', '$imagePath')";
-            if (mysqli_query($conn, $insertQuery)) {
-                setAlert("Prescription added successfully!", "success");
-            } else {
-                setAlert("Failed to add prescription: " . mysqli_error($conn), "danger");
-            }
-            redirect('prescriptions.php');
-        }
-
-        // DELETE PRESCRIPTION
-        if ($_POST['action'] === 'delete') {
-            $prescId = sanitize($_POST['presc_id']);
-
-            // Get image path
-            $res = mysqli_query($conn, "SELECT image_path FROM prescriptions WHERE id='$prescId' AND user_id='$userId'");
-            if ($res && mysqli_num_rows($res) > 0) {
-                $row = mysqli_fetch_assoc($res);
-                if ($row['image_path'] && file_exists('../'.$row['image_path'])) {
-                    unlink('../'.$row['image_path']); // Delete image file
-                }
-            }
-
-            // Delete prescription
-            mysqli_query($conn, "DELETE FROM prescriptions WHERE id='$prescId' AND user_id='$userId'");
-            setAlert("Prescription deleted successfully!", "success");
-            redirect('prescriptions.php');
+    if(empty($family_member_id) || empty($doctor_name)) {
+        $error = "Please fill in all required fields.";
+    } else {
+        $sql = "INSERT INTO prescriptions (user_id, family_member_id, created_by_user_id, doctor_name, prescription_date, description) 
+                VALUES ('$userId', '$family_member_id', '$userId', '$doctor_name', '$prescription_date', '$description')";
+        if(mysqli_query($conn, $sql)) {
+            $success = "Prescription created successfully!";
+        } else {
+            $error = "Error creating prescription.";
         }
     }
 }
 
-// Fetch user prescriptions
-$prescriptions = mysqli_query($conn, "SELECT * FROM prescriptions WHERE user_id='$userId' ORDER BY created_at DESC");
+// Handle Add Medicine to Prescription
+if($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'add_medicine') {
+    $prescription_id = intval($_POST['prescription_id']);
+    $medicine_id = intval($_POST['medicine_id']);
+    $dosage = sanitize($_POST['dosage']);
+    $unit = sanitize($_POST['unit']);
+    $quantity = intval($_POST['quantity']);
 
+    if(!$medicine_id || empty($dosage)) {
+        $error = "Please select a medicine and dosage.";
+    } else {
+        $sql = "INSERT INTO prescription_medicine (prescription_id, medicine_id, dosage, unit, quantity) 
+                VALUES ('$prescription_id', '$medicine_id', '$dosage', '$unit', '$quantity')";
+        if(mysqli_query($conn, $sql)) {
+            $success = "Medicine added to prescription!";
+        } else {
+            $error = "Error adding medicine.";
+        }
+    }
+}
+
+// Handle Delete Prescription
+if(isset($_GET['delete']) && isset($_GET['id'])) {
+    $prescription_id = intval($_GET['id']);
+    // Delete related medicines first
+    mysqli_query($conn, "DELETE FROM prescription_medicine WHERE prescription_id='$prescription_id'");
+    // Delete prescription
+    $sql = "DELETE FROM prescriptions WHERE id='$prescription_id' AND user_id='$userId'";
+    if(mysqli_query($conn, $sql)) {
+        $success = "Prescription deleted successfully!";
+    } else {
+        $error = "Error deleting prescription.";
+    }
+}
+
+// Handle Delete Medicine from Prescription
+if(isset($_GET['delete_medicine']) && isset($_GET['pm_id'])) {
+    $pm_id = intval($_GET['pm_id']);
+    $sql = "DELETE FROM prescription_medicine WHERE id='$pm_id'";
+    if(mysqli_query($conn, $sql)) {
+        $success = "Medicine removed from prescription!";
+    } else {
+        $error = "Error removing medicine.";
+    }
+}
+
+// Fetch family members
+$members = mysqli_query($conn, "SELECT * FROM family_members WHERE user_id='$userId' AND is_active=1 ORDER BY name");
+$members_array = [];
+while($m = mysqli_fetch_assoc($members)) {
+    $members_array[$m['id']] = $m['name'];
+}
+
+// Fetch medicines
+$medicines = mysqli_query($conn, "SELECT * FROM medicines WHERE is_active=1 ORDER BY name");
+$medicines_array = [];
+while($med = mysqli_fetch_assoc($medicines)) {
+    $medicines_array[$med['id']] = $med['name'];
+}
+
+// Fetch prescriptions
+$prescriptions = mysqli_query($conn, "SELECT * FROM prescriptions WHERE user_id='$userId' ORDER BY prescription_date DESC");
 ?>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Prescriptions - MediBuddy</title>
+    <link rel="stylesheet" href="../assets/css/style.css">
+    <style>
+        .medicine-form { display: none; margin-top: 1rem; padding: 1rem; background: #f5f5f5; border-radius: 8px; }
+        .form-group { margin-bottom: 1rem; }
+        .form-group label { display: block; margin-bottom: 0.5rem; font-weight: bold; }
+        .form-group input, .form-group select, .form-group textarea { width: 100%; padding: 0.75rem; border: 1px solid #ddd; border-radius: 4px; }
+        .prescription-card { background: white; padding: 1.5rem; margin: 1rem 0; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+        .prescription-card h4 { margin: 0 0 0.5rem 0; color: #667eea; }
+        .prescription-info { color: #666; font-size: 0.9rem; margin: 0.3rem 0; }
+        .medicine-item { background: #f9f9f9; padding: 0.8rem; margin: 0.5rem 0; border-left: 4px solid #667eea; }
+        .btn-sm { padding: 0.5rem 1rem; margin-right: 0.5rem; font-size: 0.9rem; }
+        .medicine-table { width: 100%; border-collapse: collapse; margin-top: 0.5rem; }
+        .medicine-table td { padding: 0.8rem; border-bottom: 1px solid #eee; }
+        .medicine-table th { padding: 0.8rem; background: #f5f5f5; text-align: left; font-weight: bold; }
+    </style>
+</head>
+<body>
+<?php require_once '../includes/header.php'; ?>
 
-<?php include '../includes/header.php'; ?>
+<main class="main-content">
+    <h2>Manage Prescriptions</h2>
+    
+    <?php 
+    if($success) echo "<div class='alert alert-success'>$success</div>";
+    if($error) echo "<div class='alert alert-danger'>$error</div>";
+    ?>
 
-<div class="container">
-    <div class="card">
-        <div class="card-header flex justify-between align-center">
-            <h2>Your Prescriptions</h2>
-            <button onclick="openModal('addPrescriptionModal')" class="btn btn-primary">Add Prescription</button>
-        </div>
-
-        <?php if(mysqli_num_rows($prescriptions) > 0): ?>
-        <table class="table">
-            <thead>
-                <tr>
-                    <th>Name</th>
-                    <th>Description</th>
-                    <th>Image</th>
-                    <th>Actions</th>
-                </tr>
-            </thead>
-            <tbody>
-                <?php while($presc = mysqli_fetch_assoc($prescriptions)): ?>
-                    <tr>
-                        <td><?php echo htmlspecialchars($presc['name']); ?></td>
-                        <td><?php echo htmlspecialchars($presc['description']); ?></td>
-                        <td>
-                            <?php if($presc['image_path']): ?>
-                                <img src="../<?php echo $presc['image_path']; ?>" style="max-width:100px;" alt="Prescription">
-                            <?php else: ?>
-                                -
-                            <?php endif; ?>
-                        </td>
-                        <td>
-                            <form method="POST" style="display:inline;" onsubmit="return confirm('Delete this prescription?');">
-                                <input type="hidden" name="action" value="delete">
-                                <input type="hidden" name="presc_id" value="<?php echo $presc['id']; ?>">
-                                <button type="submit" class="btn btn-danger btn-sm">Delete</button>
-                            </form>
-                        </td>
-                    </tr>
-                <?php endwhile; ?>
-            </tbody>
-        </table>
-        <?php else: ?>
-            <p style="padding: 20px; text-align:center;">No prescriptions added yet.</p>
-        <?php endif; ?>
-    </div>
-</div>
-
-<!-- Add Prescription Modal -->
-<div id="addPrescriptionModal" class="modal">
-    <div class="modal-content">
-        <span class="close" onclick="closeModal('addPrescriptionModal')">&times;</span>
-        <h2>Add Prescription</h2>
-        <form method="POST" enctype="multipart/form-data">
-            <input type="hidden" name="action" value="add">
-            
-            <div class="form-group">
-                <label>Prescription Name *</label>
-                <input type="text" name="prescription_name" class="form-control" required>
+    <!-- Add Prescription Form -->
+    <div class="card" style="margin-bottom: 2rem;">
+        <h3>Create New Prescription</h3>
+        <form method="POST">
+            <input type="hidden" name="action" value="add_prescription">
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+                <div class="form-group">
+                    <label>Family Member *</label>
+                    <select name="family_member_id" required>
+                        <option value="">Select Family Member</option>
+                        <?php foreach($members_array as $id => $name): ?>
+                            <option value="<?= $id ?>"><?= htmlspecialchars($name) ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Doctor Name *</label>
+                    <input type="text" name="doctor_name" placeholder="Enter doctor name" required>
+                </div>
             </div>
-
-            <div class="form-group">
-                <label>Description</label>
-                <textarea name="description" class="form-control"></textarea>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+                <div class="form-group">
+                    <label>Prescription Date *</label>
+                    <input type="date" name="prescription_date" value="<?= date('Y-m-d') ?>" required>
+                </div>
             </div>
-
             <div class="form-group">
-                <label>Upload Prescription Image</label>
-                <input type="file" name="prescription_image" accept="image/*,application/pdf">
+                <label>Description/Diagnosis</label>
+                <textarea name="description" placeholder="e.g., Patient has fever and cough. Treat with caution." rows="3"></textarea>
             </div>
-
-            <button type="submit" class="btn btn-primary">Add Prescription</button>
+            <button type="submit" class="btn btn-primary">Create Prescription</button>
         </form>
     </div>
-</div>
 
-<?php include '../includes/footer.php'; ?>
+    <!-- Prescriptions List -->
+    <h3>Your Prescriptions</h3>
+    <?php 
+    if(mysqli_num_rows($prescriptions) === 0):
+    ?>
+        <p style="color: #999;">No prescriptions yet. Create one above to get started!</p>
+    <?php 
+    else:
+        while($prescription = mysqli_fetch_assoc($prescriptions)):
+            $pm_result = mysqli_query($conn, "SELECT pm.*, m.name as medicine_name FROM prescription_medicine pm JOIN medicines m ON pm.medicine_id=m.id WHERE pm.prescription_id='{$prescription['id']}'");
+    ?>
+        <div class="prescription-card">
+            <h4>Prescription for <?= htmlspecialchars($members_array[$prescription['family_member_id']] ?? 'N/A') ?></h4>
+            <div class="prescription-info">
+                <strong>Doctor:</strong> <?= htmlspecialchars($prescription['doctor_name']) ?>
+            </div>
+            <div class="prescription-info">
+                <strong>Date:</strong> <?= date('d-m-Y', strtotime($prescription['prescription_date'])) ?>
+            </div>
+            <?php if($prescription['description']): ?>
+                <div class="prescription-info">
+                    <strong>Diagnosis:</strong> <?= htmlspecialchars($prescription['description']) ?>
+                </div>
+            <?php endif; ?>
+
+            <!-- Medicines List -->
+            <h5 style="margin-top: 1rem; margin-bottom: 0.5rem;">Medicines:</h5>
+            <?php 
+            if(mysqli_num_rows($pm_result) === 0):
+                echo "<p style='color: #999; font-size: 0.9rem;'>No medicines added yet.</p>";
+            else:
+            ?>
+                <table class="medicine-table">
+                    <thead>
+                        <tr>
+                            <th>Medicine Name</th>
+                            <th>Dosage</th>
+                            <th>Unit</th>
+                            <th>Quantity</th>
+                            <th>Action</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php while($pm = mysqli_fetch_assoc($pm_result)): ?>
+                            <tr>
+                                <td><?= htmlspecialchars($pm['medicine_name']) ?></td>
+                                <td><?= htmlspecialchars($pm['dosage']) ?></td>
+                                <td><?= htmlspecialchars($pm['unit']) ?></td>
+                                <td><?= $pm['quantity'] ?></td>
+                                <td>
+                                    <a href="?delete_medicine=1&pm_id=<?= $pm['id'] ?>" class="btn btn-sm" style="background: #dc3545; color: white; padding: 0.3rem 0.6rem; font-size: 0.8rem;" onclick="return confirm('Remove this medicine?')">Remove</a>
+                                </td>
+                            </tr>
+                        <?php endwhile; ?>
+                    </tbody>
+                </table>
+            <?php endif; ?>
+
+            <!-- Add Medicine Form -->
+            <button class="btn btn-secondary btn-sm" onclick="toggleMedicineForm(<?= $prescription['id'] ?>)" style="margin-top: 0.5rem;">Add Medicine</button>
+            
+            <div class="medicine-form" id="medicine-form-<?= $prescription['id'] ?>">
+                <h5>Add Medicine to Prescription</h5>
+                <form method="POST">
+                    <input type="hidden" name="action" value="add_medicine">
+                    <input type="hidden" name="prescription_id" value="<?= $prescription['id'] ?>">
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+                        <div class="form-group">
+                            <label>Medicine *</label>
+                            <select name="medicine_id" required>
+                                <option value="">Select Medicine</option>
+                                <?php foreach($medicines_array as $id => $name): ?>
+                                    <option value="<?= $id ?>"><?= htmlspecialchars($name) ?></option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Dosage *</label>
+                            <input type="text" name="dosage" placeholder="e.g., 500mg" required>
+                        </div>
+                    </div>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+                        <div class="form-group">
+                            <label>Unit</label>
+                            <input type="text" name="unit" placeholder="e.g., tablet, ml, injection">
+                        </div>
+                        <div class="form-group">
+                            <label>Quantity</label>
+                            <input type="number" name="quantity" placeholder="e.g., 1" min="1" value="1">
+                        </div>
+                    </div>
+                    <button type="submit" class="btn btn-primary btn-sm">Add Medicine</button>
+                    <button type="button" class="btn btn-secondary btn-sm" onclick="toggleMedicineForm(<?= $prescription['id'] ?>)">Cancel</button>
+                </form>
+            </div>
+
+            <!-- Delete Prescription -->
+            <div style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid #eee;">
+                <a href="?delete=1&id=<?= $prescription['id'] ?>" class="btn btn-sm" style="background: #dc3545; color: white;" onclick="return confirm('Delete this prescription? All medicines will be removed.')">Delete Prescription</a>
+            </div>
+        </div>
+    <?php 
+        endwhile;
+    endif;
+    ?>
+
+</main>
+
+<?php require_once '../includes/footer.php'; ?>
+
+<script>
+function toggleMedicineForm(prescriptionId) {
+    const form = document.getElementById('medicine-form-' + prescriptionId);
+    form.style.display = form.style.display === 'none' ? 'block' : 'none';
+}
+</script>
+</body>
+</html>
