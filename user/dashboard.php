@@ -24,7 +24,7 @@ $upcoming_reminders = mysqli_query($conn, "SELECT r.*, m.name as medicine_name, 
     .dashboard-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1.5rem; margin-bottom: 2rem; }
     .stat-box { background: white; padding: 1.5rem; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); border-top: 4px solid #667eea; text-align: center; }
     .stat-number { font-size: 2rem; font-weight: bold; color: #667eea; }
-    .stat-label { color: #999; font-size: 0.9rem; margin-top: 0.5rem; }
+    .stat-label { color: blue; font-size: 1rem; margin-top: 0.5rem; }
     .dashboard-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 1.5rem; }
     .quick-action { background: white; padding: 2rem; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); text-align: center; transition: 0.3s; }
     .quick-action:hover { box-shadow: 0 4px 12px rgba(0,0,0,0.15); }
@@ -37,8 +37,8 @@ $upcoming_reminders = mysqli_query($conn, "SELECT r.*, m.name as medicine_name, 
 </style>
 
 <main class="main-content">
-    <h2>Dashboard</h2>
-    <p style="color: #999; margin-bottom: 2rem;">Welcome back, <?= htmlspecialchars($_SESSION['full_name']) ?>!</p>
+    <h2 style="color:black; font-size:3rem;" >Dashboard</h2>
+    <p style="color: black; margin-bottom: 2rem;font-size:2rem;">Welcome back, <?= htmlspecialchars($_SESSION['full_name']) ?>!</p>
 
     <!-- Quick Statistics -->
     <div class="dashboard-stats">

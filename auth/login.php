@@ -83,9 +83,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         <div class="auth-footer">
             <p>Don't have an account? <a href="register.php">Register here</a></p>
             <p style="margin-top: 1rem; font-size: 0.9rem;">
-                Demo Credentials:<br>
+                <!-- Demo Credentials:<br>
                 Email: <code style="background: #f5f5f5; padding: 0.2rem 0.5rem;">admin@medibuddy.com</code><br>
-                Password: <code style="background: #f5f5f5; padding: 0.2rem 0.5rem;">admin123</code>
+                Password: <code style="background: #f5f5f5; padding: 0.2rem 0.5rem;">admin123</code> -->
             </p>
         </div>
     </div>
