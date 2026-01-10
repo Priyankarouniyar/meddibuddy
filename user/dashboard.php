@@ -24,12 +24,12 @@ $upcoming_reminders = mysqli_query($conn, "SELECT r.*, m.name as medicine_name, 
     .dashboard-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1.5rem; margin-bottom: 2rem; }
     .stat-box { background: white; padding: 1.5rem; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); border-top: 4px solid #667eea; text-align: center; }
     .stat-number { font-size: 2rem; font-weight: bold; color: #667eea; }
-    .stat-label { color: blue; font-size: 1rem; margin-top: 0.5rem; }
+    .stat-label { color: blue; font-size: 2rem; margin-top: 0.5rem; }
     .dashboard-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 1.5rem; }
     .quick-action { background: white; padding: 2rem; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); text-align: center; transition: 0.3s; }
     .quick-action:hover { box-shadow: 0 4px 12px rgba(0,0,0,0.15); }
-    .quick-action h4 { margin: 0 0 0.5rem 0; color: #333; }
-    .quick-action p { color: #999; margin: 0.5rem 0; font-size: 0.9rem; }
+    .quick-action h4 { margin: 0 0 0.5rem 0; color: black; font-size: 2rem; }
+    .quick-action p { color: blueviolet; margin: 0.5rem 0; font-size: 1rem; }
     .upcoming-box { background: white; padding: 1.5rem; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); margin-top: 2rem; }
     .reminder-item { padding: 1rem; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; align-items: center; }
     .reminder-item:last-child { border-bottom: none; }
