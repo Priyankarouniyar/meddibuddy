@@ -135,7 +135,7 @@ $manufacturers_result = mysqli_query($conn, $manufacturers_query);
             border-radius: 12px;
             width: 90%;
             max-width: 600px;
-            max-height: 90vh;
+            max-height: 60vh;
             overflow-y: auto;
             box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
         }
@@ -341,7 +341,7 @@ $manufacturers_result = mysqli_query($conn, $manufacturers_query);
                         <td><?php echo htmlspecialchars($drug['dosage'] . ' ' . $drug['unit']); ?></td>
                         <td><?php echo htmlspecialchars($drug['type_name'] ?? 'N/A'); ?></td>
                         <td><?php echo htmlspecialchars($drug['manufacturer_name'] ?? 'N/A'); ?></td>
-                        <td class="price-cell">₹<?php echo number_format($drug['price'], 2); ?></td>
+                        <td class="price-cell">Rs.<?php echo number_format($drug['price'], 2); ?></td>
                         <td>
                             <div class="action-buttons">
                                 <button class="btn-edit" onclick="editDrug(<?php echo htmlspecialchars(json_encode($drug)); ?>)">Edit</button>
@@ -411,7 +411,7 @@ $manufacturers_result = mysqli_query($conn, $manufacturers_query);
                 </div>
 
                 <div class="form-group">
-                    <label for="price">Price (₹)</label>
+                    <label for="price">Price (Rs.)</label>
                     <input type="number" id="price" name="price" step="0.01" placeholder="0.00">
                 </div>
 

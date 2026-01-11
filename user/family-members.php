@@ -1,18 +1,19 @@
-<?php 
+<?php
+session_start();
 require_once '../config/database.php';
 require_once '../includes/functions.php';
 
 requireLogin();
-if(isAdmin()) redirect('../auth/login.php');
+if (isAdmin()) redirect('../auth/login.php');
 
 $userId = $_SESSION['user_id'];
 $success = '';
 $error = '';
 
 // =========================
-// Handle Add Member
+// Handle Add/Edit/Delete
 // =========================
-if($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
     $action = $_POST['action'];
     $name = sanitize($_POST['name']);
     $gender_id = intval($_POST['gender_id']);
@@ -21,7 +22,7 @@ if($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
     $medical_conditions = sanitize($_POST['medical_conditions']);
     $allergies = sanitize($_POST['allergies']);
     $phone = sanitize($_POST['phone']);
-    
+
     $emergency_contact_name = sanitize($_POST['emergency_contact_name']);
     $emergency_contact_phone = sanitize($_POST['emergency_contact_phone']);
     $emergency_contact_relationship = sanitize($_POST['emergency_contact_relationship']);
@@ -32,45 +33,50 @@ if($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
     $emergency_hospital_address = sanitize($_POST['emergency_hospital_address']);
     $emergency_hospital_phone = sanitize($_POST['emergency_hospital_phone']);
 
-    if(empty($name) || !$gender_id || !$relationship_id) {
-        $error = "Please fill all required fields.";
-    } else {
-        if($action === 'add'){
-            $sql = "INSERT INTO family_members (user_id, name, gender_id, date_of_birth, relationship_id, medical_conditions, allergies, phone, emergency_contact_name, emergency_contact_phone, emergency_contact_relationship, emergency_doctor_name, emergency_doctor_phone, doctor_specialization, emergency_hospital_name, emergency_hospital_address, emergency_hospital_phone) 
-                    VALUES ('$userId', '$name', '$gender_id', '$dob', '$relationship_id', '$medical_conditions', '$allergies', '$phone', '$emergency_contact_name', '$emergency_contact_phone', '$emergency_contact_relationship', '$emergency_doctor_name', '$emergency_doctor_phone', '$doctor_specialization', '$emergency_hospital_name', '$emergency_hospital_address', '$emergency_hospital_phone')";
-            $msg = "added";
-        } elseif($action === 'edit') {
-            $member_id = intval($_POST['member_id']);
-            $sql = "UPDATE family_members SET 
-                name='$name', gender_id='$gender_id', date_of_birth='$dob', relationship_id='$relationship_id',
-                medical_conditions='$medical_conditions', allergies='$allergies', phone='$phone',
-                emergency_contact_name='$emergency_contact_name', emergency_contact_phone='$emergency_contact_phone',
-                emergency_contact_relationship='$emergency_contact_relationship', emergency_doctor_name='$emergency_doctor_name',
-                emergency_doctor_phone='$emergency_doctor_phone', doctor_specialization='$doctor_specialization',
-                emergency_hospital_name='$emergency_hospital_name', emergency_hospital_address='$emergency_hospital_address',
-                emergency_hospital_phone='$emergency_hospital_phone'
-                WHERE id='$member_id' AND user_id='$userId'";
-            $msg = "updated";
-        }
-
-        if(mysqli_query($conn, $sql)) {
-            $success = "Family member $msg successfully!";
+    if ($action === 'add' || $action === 'edit') {
+        if (empty($name) || !$gender_id || !$relationship_id) {
+            $error = "Please fill all required fields.";
         } else {
-            $error = "Error! Please try again.";
-        }
-    }
-}
+            if ($action === 'add') {
+                $sql = "INSERT INTO family_members 
+                    (user_id, name, gender_id, date_of_birth, relationship_id, medical_conditions, allergies, phone, 
+                    emergency_contact_name, emergency_contact_phone, emergency_contact_relationship, 
+                    emergency_doctor_name, emergency_doctor_phone, doctor_specialization,
+                    emergency_hospital_name, emergency_hospital_address, emergency_hospital_phone) 
+                    VALUES 
+                    ('$userId','$name','$gender_id','$dob','$relationship_id','$medical_conditions','$allergies','$phone',
+                    '$emergency_contact_name','$emergency_contact_phone','$emergency_contact_relationship',
+                    '$emergency_doctor_name','$emergency_doctor_phone','$doctor_specialization',
+                    '$emergency_hospital_name','$emergency_hospital_address','$emergency_hospital_phone')";
+                $msg = "added";
+            } else {
+                $member_id = intval($_POST['member_id']);
+                $sql = "UPDATE family_members SET 
+                    name='$name', gender_id='$gender_id', date_of_birth='$dob', relationship_id='$relationship_id',
+                    medical_conditions='$medical_conditions', allergies='$allergies', phone='$phone',
+                    emergency_contact_name='$emergency_contact_name', emergency_contact_phone='$emergency_contact_phone',
+                    emergency_contact_relationship='$emergency_contact_relationship', emergency_doctor_name='$emergency_doctor_name',
+                    emergency_doctor_phone='$emergency_doctor_phone', doctor_specialization='$doctor_specialization',
+                    emergency_hospital_name='$emergency_hospital_name', emergency_hospital_address='$emergency_hospital_address',
+                    emergency_hospital_phone='$emergency_hospital_phone'
+                    WHERE id='$member_id' AND user_id='$userId'";
+                $msg = "updated";
+            }
 
-// =========================
-// Handle Delete
-// =========================
-if(isset($_GET['delete']) && isset($_GET['id'])) {
-    $member_id = intval($_GET['id']);
-    $sql = "DELETE FROM family_members WHERE id='$member_id' AND user_id='$userId'";
-    if(mysqli_query($conn, $sql)) {
-        $success = "Family member deleted successfully!";
-    } else {
-        $error = "Error deleting member.";
+            if (mysqli_query($conn, $sql)) {
+                $success = "Family member $msg successfully!";
+            } else {
+                $error = "Error! Please try again.";
+            }
+        }
+    } elseif ($action === 'delete') {
+        $member_id = intval($_POST['member_id']);
+        $sql = "DELETE FROM family_members WHERE id='$member_id' AND user_id='$userId'";
+        if (mysqli_query($conn, $sql)) {
+            $success = "Family member deleted successfully!";
+        } else {
+            $error = "Error deleting member.";
+        }
     }
 }
 
@@ -79,16 +85,16 @@ if(isset($_GET['delete']) && isset($_GET['id'])) {
 // =========================
 $genders_array = [];
 $result = mysqli_query($conn, "SELECT * FROM genders ORDER BY name");
-while($r = mysqli_fetch_assoc($result)) $genders_array[$r['id']] = $r['name'];
+while ($r = mysqli_fetch_assoc($result)) $genders_array[$r['id']] = $r['name'];
 
 $relationships_array = [];
 $result = mysqli_query($conn, "SELECT * FROM relationships ORDER BY name");
-while($r = mysqli_fetch_assoc($result)) $relationships_array[$r['id']] = $r['name'];
+while ($r = mysqli_fetch_assoc($result)) $relationships_array[$r['id']] = $r['name'];
 
 // =========================
 // Fetch Family Members
 // =========================
-$members = mysqli_query($conn, "SELECT * FROM family_members WHERE user_id='$userId' AND is_active=1 ORDER BY name");
+$members_result = mysqli_query($conn, "SELECT * FROM family_members WHERE user_id='$userId' AND is_active=1 ORDER BY name");
 ?>
 
 <!DOCTYPE html>
@@ -97,177 +103,197 @@ $members = mysqli_query($conn, "SELECT * FROM family_members WHERE user_id='$use
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Family Members - MediBuddy</title>
+
 <link rel="stylesheet" href="../assets/css/style.css">
 <style>
-body { font-family: Arial, sans-serif; }
-.main-content { display: grid; grid-template-columns: 1fr 1fr; gap: 2rem; margin: 2rem; }
-.card { background: #fff; padding: 1.5rem; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
-.form-group { margin-bottom: 1rem; }
-.form-group label { display: block; margin-bottom: 0.5rem; font-weight: bold; }
-.form-group input, .form-group select, .form-group textarea { width: 100%; padding: 0.5rem; border: 1px solid #ddd; border-radius: 4px; }
-.btn { padding: 0.5rem 1rem; border: none; border-radius: 4px; cursor: pointer; }
-.btn-primary { background: #007bff; color: white; }
-.btn-secondary { background: #6c757d; color: white; }
-.btn-danger { background: #dc3545; color: white; }
-.member-card { background: #f9f9f9; padding: 1rem; margin-bottom: 1rem; border-radius: 8px; }
-.member-info { font-size: 0.9rem; margin: 0.3rem 0; }
-.emergency-section { margin-top: 0.5rem; padding-top: 0.5rem; border-top: 1px dashed #ddd; }
-.emergency-header { font-weight: bold; color: #d9534f; margin-bottom: 0.3rem; }
-.edit-form { display: none; margin-top: 1rem; padding: 1rem; background: #f5f5f5; border-radius: 8px; }
+/* Reuse styles from Doctors page */
+.doctors-container { max-width: 1200px;
+    margin: 0 auto;
+     padding: 20px;
+     }
+
+.header-section { display:flex; justify-content:space-between; align-items:center; margin-bottom:30px; flex-wrap:wrap; gap:15px; }
+.add-doctor-btn { padding:12px 24px; background:linear-gradient(135deg,#667eea 0%,#764ba2 100%); color:white; border:none; border-radius:8px; cursor:pointer; font-size:16px; font-weight:bold; }
+.add-doctor-btn:hover { transform:translateY(-2px); }
+.modal { display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:1000; justify-content:center; align-items:center; }
+.modal.active { display:flex; }
+.modal-content { background:white; padding:30px; border-radius:12px; width:90%; max-width:700px; max-height:50vh; overflow-y:auto; box-shadow:0 10px 40px rgba(0,0,0,0.2); }
+.modal-header { margin-bottom:20px; display:flex; justify-content:space-between; align-items:center; }
+.modal-header h2 { margin:0; color:#333; }
+.close-btn { background:none; border:none; font-size:28px; cursor:pointer; color:#666; }
+.form-group { margin-bottom:15px; }
+.form-group label { display:block; margin-bottom:5px; color:#333; font-weight:500; }
+.form-group input, .form-group select, .form-group textarea { width:100%; padding:10px; border:1px solid #ddd; border-radius:6px; font-size:14px; box-sizing:border-box; }
+.form-actions { display:flex; gap:10px; margin-top:20px; }
+.btn-submit { flex:1; padding:12px; background:#667eea; color:white; border:none; border-radius:6px; cursor:pointer; font-weight:bold; }
+.btn-cancel { flex:1; padding:12px; background:#ddd; color:#333; border:none; border-radius:6px; cursor:pointer; }
+.doctors-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(300px,1fr)); gap:20px; }
+.doctor-card { background:white; border-radius:12px; padding:20px; box-shadow:0 2px 8px rgba(0,0,0,0.1); transition:transform 0.3s, box-shadow 0.3s; }
+.doctor-card:hover { transform:translateY(-5px); box-shadow:0 8px 16px rgba(0,0,0,0.15); }
+.doctor-name { font-size:18px; font-weight:bold; color:#333; margin-bottom:8px; }
+.doctor-specialization { color:#667eea; font-weight:600; margin-bottom:12px; }
+.doctor-info { font-size:14px; color:#666; margin-bottom:8px; line-height:1.6; }
+.doctor-info strong { color:#333; }
+.card-actions { display:flex; gap:8px; margin-top:15px; padding-top:15px; border-top:1px solid #eee; }
+.btn-edit, .btn-delete { flex:1; padding:8px; border:none; border-radius:6px; cursor:pointer; font-weight:bold; transition:opacity 0.3s; }
+.btn-edit { background:#667eea; color:white; }
+.btn-delete { background:#e74c3c; color:white; }
+.btn-edit:hover, .btn-delete:hover { opacity:0.8; }
+.alert { padding:15px; border-radius:8px; margin-bottom:20px; }
+.alert-success { background:#d4edda; color:#155724; border:1px solid #c3e6cb; }
+.alert-error { background:#f8d7da; color:#721c24; border:1px solid #f5c6cb; }
 </style>
 </head>
 <body>
 
-<?php require_once '../includes/header.php'; ?>
+<?php include '../includes/header.php'; ?>
 
-<main class="main-content">
+<div class="doctors-container">
+    <div class="header-section">
+        <h1>Manage Family Members</h1>
+        <button class="add-doctor-btn" onclick="openModal()">+ Add New Member</button>
+    </div>
 
-<!-- Left Column: Add Member Form -->
-<div class="card">
-    <h3>Add New Family Member</h3>
-    <?php if($success) echo "<div style='color:green;'>$success</div>"; ?>
-    <?php if($error) echo "<div style='color:red;'>$error</div>"; ?>
-    <form method="POST">
-        <input type="hidden" name="action" value="add">
-        <div class="form-group"><label>Full Name *</label><input type="text" name="name" required></div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;">
-            <div class="form-group"><label>Gender *</label>
-                <select name="gender_id" required>
-                    <option value="">Select</option>
-                    <?php foreach($genders_array as $id=>$g): ?>
-                        <option value="<?= $id ?>"><?= $g ?></option>
-                    <?php endforeach; ?>
-                </select>
-            </div>
-            <div class="form-group"><label>Relationship *</label>
-                <select name="relationship_id" required>
-                    <option value="">Select</option>
-                    <?php foreach($relationships_array as $id=>$r): ?>
-                        <option value="<?= $id ?>"><?= $r ?></option>
-                    <?php endforeach; ?>
-                </select>
-            </div>
-        </div>
-        <div class="form-group"><label>DOB</label><input type="date" name="dob"></div>
-        <div class="form-group"><label>Phone</label><input type="tel" name="phone"></div>
-        <div class="form-group"><label>Medical Conditions</label><textarea name="medical_conditions"></textarea></div>
-        <div class="form-group"><label>Allergies</label><textarea name="allergies"></textarea></div>
+    <?php if($success): ?><div class="alert alert-success"><?= htmlspecialchars($success) ?></div><?php endif; ?>
+    <?php if($error): ?><div class="alert alert-error"><?= htmlspecialchars($error) ?></div><?php endif; ?>
 
-        <h4>Emergency Contact</h4>
-        <div class="form-group"><label>Name</label><input type="text" name="emergency_contact_name"></div>
-        <div class="form-group"><label>Phone</label><input type="tel" name="emergency_contact_phone"></div>
-        <div class="form-group"><label>Relationship</label><input type="text" name="emergency_contact_relationship"></div>
+    <div class="doctors-grid">
+        <?php while($member = mysqli_fetch_assoc($members_result)): ?>
+        <div class="doctor-card">
+            <div class="doctor-name"><?= htmlspecialchars($member['name']) ?></div>
+            <div class="doctor-specialization"><?= $relationships_array[$member['relationship_id']] ?? 'N/A' ?> | <?= $genders_array[$member['gender_id']] ?? 'N/A' ?></div>
+            <div class="doctor-info"><strong>DOB:</strong> <?= $member['date_of_birth'] ?: 'N/A' ?></div>
+            <div class="doctor-info"><strong>Phone:</strong> <?= $member['phone'] ?: 'N/A' ?></div>
+            <div class="doctor-info"><strong>Medical-condition:</strong> <?= $member['medical_conditions'] ?: 'N/A' ?></div>
+            <div class="doctor-info"><strong>Allergies:</strong> <?= $member['allergies'] ?: 'N/A' ?></div>
 
-        <h4>Doctor Info</h4>
-        <div class="form-group"><label>Doctor Name</label><input type="text" name="emergency_doctor_name"></div>
-        <div class="form-group"><label>Doctor Phone</label><input type="tel" name="emergency_doctor_phone"></div>
-        <div class="form-group"><label>Specialization</label><input type="text" name="doctor_specialization"></div>
+            <div class="doctor-info"><strong>Emergency Contact:</strong> <?= $member['emergency_contact_name'] ?: 'N/A' ?> (<?= $member['emergency_contact_relationship'] ?: 'N/A' ?>)</div>
+            <div class="doctor-info"><strong>Contact Phone:</strong> <?= $member['emergency_contact_phone'] ?: 'N/A' ?></div>
+            <div class="doctor-info"><strong>Doctor:</strong> <?= $member['emergency_doctor_name'] ?: 'N/A' ?> (<?= $member['doctor_specialization'] ?: 'N/A' ?>)</div>
+            <div class="doctor-info"><strong>Doctor Phone:</strong> <?= $member['emergency_doctor_phone'] ?: 'N/A' ?></div>
+            <div class="doctor-info"><strong>Hospital:</strong> <?= $member['emergency_hospital_name'] ?: 'N/A' ?></div>
+            <div class="doctor-info"><strong>Hospital Address:</strong> <?= $member['emergency_hospital_address'] ?: 'N/A' ?></div>
+            <div class="doctor-info"><strong>Hospital Phone:</strong> <?= $member['emergency_hospital_phone'] ?: 'N/A' ?></div>
 
-        <h4>Hospital Info</h4>
-        <div class="form-group"><label>Hospital Name</label><input type="text" name="emergency_hospital_name"></div>
-        <div class="form-group"><label>Address</label><input type="text" name="emergency_hospital_address"></div>
-        <div class="form-group"><label>Phone</label><input type="tel" name="emergency_hospital_phone"></div>
-
-        <button type="submit" class="btn btn-primary">Add Member</button>
-    </form>
-</div>
-
-<!-- Right Column: Family Members List -->
-<div>
-    <h3>Your Family Members</h3>
-    <?php if(mysqli_num_rows($members)===0): ?>
-        <p>No family members yet.</p>
-    <?php else: while($member=mysqli_fetch_assoc($members)): ?>
-        <div class="member-card">
-            <h4><?= htmlspecialchars($member['name']) ?></h4>
-            <div class="member-info"><strong>Relationship:</strong> <?= $relationships_array[$member['relationship_id']] ?? 'N/A' ?></div>
-            <div class="member-info"><strong>Gender:</strong> <?= $genders_array[$member['gender_id']] ?? 'N/A' ?></div>
-            <?php if($member['phone']): ?><div class="member-info"><strong>Phone:</strong> <?= $member['phone'] ?></div><?php endif; ?>
-            <?php if($member['medical_conditions']): ?><div class="member-info"><strong>Medical:</strong> <?= $member['medical_conditions'] ?></div><?php endif; ?>
-            <?php if($member['allergies']): ?><div class="member-info"><strong>Allergies:</strong> <?= $member['allergies'] ?></div><?php endif; ?>
-
-            <!-- Emergency Info -->
-            <?php if($member['emergency_contact_name'] || $member['emergency_doctor_name'] || $member['emergency_hospital_name']): ?>
-            <div class="emergency-section">
-                <div class="emergency-header">EMERGENCY INFO</div>
-                <?php if($member['emergency_contact_name']): ?>
-                    <div class="member-info"><strong>Contact:</strong> <?= $member['emergency_contact_name'] ?> (<?= $member['emergency_contact_relationship'] ?>)</div>
-                    <div class="member-info"><strong>Phone:</strong> <?= $member['emergency_contact_phone'] ?></div>
-                <?php endif; ?>
-                <?php if($member['emergency_doctor_name']): ?>
-                    <div class="member-info"><strong>Doctor:</strong> <?= $member['emergency_doctor_name'] ?> (<?= $member['doctor_specialization'] ?>)</div>
-                    <div class="member-info"><strong>Phone:</strong> <?= $member['emergency_doctor_phone'] ?></div>
-                <?php endif; ?>
-                <?php if($member['emergency_hospital_name']): ?>
-                    <div class="member-info"><strong>Hospital:</strong> <?= $member['emergency_hospital_name'] ?></div>
-                    <div class="member-info"><strong>Address:</strong> <?= $member['emergency_hospital_address'] ?></div>
-                    <div class="member-info"><strong>Phone:</strong> <?= $member['emergency_hospital_phone'] ?></div>
-                <?php endif; ?>
-            </div>
-            <?php endif; ?>
-
-            <div style="margin-top:0.5rem;">
-                <button class="btn btn-secondary btn-sm" onclick="toggleEditForm(<?= $member['id'] ?>)">Edit</button>
-                <a href="?delete=1&id=<?= $member['id'] ?>" class="btn btn-danger btn-sm" onclick="return confirm('Are you sure?')">Delete</a>
-            </div>
-
-            <!-- Edit Form -->
-            <div class="edit-form" id="edit-form-<?= $member['id'] ?>">
-                <form method="POST">
-                    <input type="hidden" name="action" value="edit">
+            <div class="card-actions">
+                <button class="btn-edit" onclick='editMember(<?= json_encode($member) ?>)'>Edit</button>
+                <form method="POST" style="flex:1;">
+                    <input type="hidden" name="action" value="delete">
                     <input type="hidden" name="member_id" value="<?= $member['id'] ?>">
-                    <div class="form-group"><label>Name</label><input type="text" name="name" value="<?= htmlspecialchars($member['name']) ?>"></div>
-                    <div class="form-group"><label>Gender</label>
-                        <select name="gender_id">
-                            <?php foreach($genders_array as $id=>$g): ?>
-                                <option value="<?= $id ?>" <?= $member['gender_id']==$id?'selected':'' ?>><?= $g ?></option>
-                            <?php endforeach; ?>
-                        </select>
-                    </div>
-                    <div class="form-group"><label>Relationship</label>
-                        <select name="relationship_id">
-                            <?php foreach($relationships_array as $id=>$r): ?>
-                                <option value="<?= $id ?>" <?= $member['relationship_id']==$id?'selected':'' ?>><?= $r ?></option>
-                            <?php endforeach; ?>
-                        </select>
-                    </div>
-                    <div class="form-group"><label>DOB</label><input type="date" name="dob" value="<?= $member['date_of_birth'] ?>"></div>
-                    <div class="form-group"><label>Phone</label><input type="tel" name="phone" value="<?= $member['phone'] ?>"></div>
-                    <div class="form-group"><label>Medical Conditions</label><textarea name="medical_conditions"><?= $member['medical_conditions'] ?></textarea></div>
-                    <div class="form-group"><label>Allergies</label><textarea name="allergies"><?= $member['allergies'] ?></textarea></div>
-
-                    <h4>Emergency Contact</h4>
-                    <div class="form-group"><label>Name</label><input type="text" name="emergency_contact_name" value="<?= $member['emergency_contact_name'] ?>"></div>
-                    <div class="form-group"><label>Phone</label><input type="tel" name="emergency_contact_phone" value="<?= $member['emergency_contact_phone'] ?>"></div>
-                    <div class="form-group"><label>Relationship</label><input type="text" name="emergency_contact_relationship" value="<?= $member['emergency_contact_relationship'] ?>"></div>
-
-                    <h4>Doctor Info</h4>
-                    <div class="form-group"><label>Doctor Name</label><input type="text" name="emergency_doctor_name" value="<?= $member['emergency_doctor_name'] ?>"></div>
-                    <div class="form-group"><label>Doctor Phone</label><input type="tel" name="emergency_doctor_phone" value="<?= $member['emergency_doctor_phone'] ?>"></div>
-                    <div class="form-group"><label>Specialization</label><input type="text" name="doctor_specialization" value="<?= $member['doctor_specialization'] ?>"></div>
-
-                    <h4>Hospital Info</h4>
-                    <div class="form-group"><label>Hospital Name</label><input type="text" name="emergency_hospital_name" value="<?= $member['emergency_hospital_name'] ?>"></div>
-                    <div class="form-group"><label>Address</label><input type="text" name="emergency_hospital_address" value="<?= $member['emergency_hospital_address'] ?>"></div>
-                    <div class="form-group"><label>Phone</label><input type="tel" name="emergency_hospital_phone" value="<?= $member['emergency_hospital_phone'] ?>"></div>
-
-                    <button type="submit" class="btn btn-primary btn-sm">Save</button>
-                    <button type="button" class="btn btn-secondary btn-sm" onclick="toggleEditForm(<?= $member['id'] ?>)">Cancel</button>
+                    <button type="submit" class="btn-delete" onclick="return confirm('Are you sure?')">Delete</button>
                 </form>
             </div>
-
         </div>
-    <?php endwhile; endif; ?>
+        <?php endwhile; ?>
+    </div>
 </div>
 
-</main>
+<!-- Add/Edit Modal -->
+<div id="memberModal" class="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2 id="modalTitle">Add New Member</h2>
+            <button class="close-btn" onclick="closeModal()">&times;</button>
+        </div>
 
-<?php require_once '../includes/footer.php'; ?>
+        <form id="memberForm" method="POST">
+            <input type="hidden" name="action" id="formAction" value="add">
+            <input type="hidden" name="member_id" id="memberId">
+
+            <div class="form-group">
+                <label>Full Name *</label>
+                <input type="text" name="name" id="member_name" required>
+            </div>
+
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:15px;">
+                <div class="form-group">
+                    <label>Gender *</label>
+                    <select name="gender_id" id="member_gender" required>
+                        <option value="">Select</option>
+                        <?php foreach($genders_array as $id=>$g): ?>
+                        <option value="<?= $id ?>"><?= $g ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Relationship *</label>
+                    <select name="relationship_id" id="member_relationship" required>
+                        <option value="">Select</option>
+                        <?php foreach($relationships_array as $id=>$r): ?>
+                        <option value="<?= $id ?>"><?= $r ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+            </div>
+
+            <div class="form-group"><label>DOB</label><input type="date" name="dob" id="member_dob"></div>
+            <div class="form-group"><label>Phone</label><input type="tel" name="phone" id="member_phone"></div>
+            <div class="form-group"><label>Medical Conditions</label><textarea name="medical_conditions" id="member_medical"></textarea></div>
+            <div class="form-group"><label>Allergies</label><textarea name="allergies" id="member_allergies"></textarea></div>
+
+            <h4>Emergency Contact</h4>
+            <div class="form-group"><label>Name</label><input type="text" name="emergency_contact_name" id="member_emergency_name"></div>
+            <div class="form-group"><label>Phone</label><input type="tel" name="emergency_contact_phone" id="member_emergency_phone"></div>
+            <div class="form-group"><label>Relationship</label><input type="text" name="emergency_contact_relationship" id="member_emergency_relationship"></div>
+
+            <h4>Doctor Info</h4>
+            <div class="form-group"><label>Doctor Name</label><input type="text" name="emergency_doctor_name" id="member_doctor_name"></div>
+            <div class="form-group"><label>Doctor Phone</label><input type="tel" name="emergency_doctor_phone" id="member_doctor_phone"></div>
+            <div class="form-group"><label>Specialization</label><input type="text" name="doctor_specialization" id="member_doctor_spec"></div>
+
+            <h4>Hospital Info</h4>
+            <div class="form-group"><label>Hospital Name</label><input type="text" name="emergency_hospital_name" id="member_hospital_name"></div>
+            <div class="form-group"><label>Address</label><input type="text" name="emergency_hospital_address" id="member_hospital_address"></div>
+            <div class="form-group"><label>Phone</label><input type="tel" name="emergency_hospital_phone" id="member_hospital_phone"></div>
+
+            <div class="form-actions">
+                <button type="submit" class="btn-submit">Save Member</button>
+                <button type="button" class="btn-cancel" onclick="closeModal()">Cancel</button>
+            </div>
+        </form>
+    </div>
+</div>
 
 <script>
-function toggleEditForm(id){
-    const form = document.getElementById('edit-form-'+id);
-    form.style.display = form.style.display==='none'?'block':'none';
+function openModal(){
+    document.getElementById('memberModal').classList.add('active');
+    document.getElementById('modalTitle').textContent='Add New Member';
+    document.getElementById('formAction').value='add';
+    document.getElementById('memberForm').reset();
+    document.getElementById('memberId').value='';
+}
+
+function closeModal(){
+    document.getElementById('memberModal').classList.remove('active');
+}
+
+function editMember(member){
+    openModal();
+    document.getElementById('modalTitle').textContent='Edit Member';
+    document.getElementById('formAction').value='edit';
+    document.getElementById('memberId').value = member.id;
+
+    document.getElementById('member_name').value = member.name;
+    document.getElementById('member_gender').value = member.gender_id;
+    document.getElementById('member_relationship').value = member.relationship_id;
+    document.getElementById('member_dob').value = member.date_of_birth;
+    document.getElementById('member_phone').value = member.phone;
+    document.getElementById('member_medical').value = member.medical_conditions;
+    document.getElementById('member_allergies').value = member.allergies;
+    document.getElementById('member_emergency_name').value = member.emergency_contact_name;
+    document.getElementById('member_emergency_phone').value = member.emergency_contact_phone;
+    document.getElementById('member_emergency_relationship').value = member.emergency_contact_relationship;
+    document.getElementById('member_doctor_name').value = member.emergency_doctor_name;
+    document.getElementById('member_doctor_phone').value = member.emergency_doctor_phone;
+    document.getElementById('member_doctor_spec').value = member.doctor_specialization;
+    document.getElementById('member_hospital_name').value = member.emergency_hospital_name;
+    document.getElementById('member_hospital_address').value = member.emergency_hospital_address;
+    document.getElementById('member_hospital_phone').value = member.emergency_hospital_phone;
+}
+
+// Close modal on outside click
+window.onclick = function(e){
+    if(e.target==document.getElementById('memberModal')) closeModal();
 }
 </script>
 

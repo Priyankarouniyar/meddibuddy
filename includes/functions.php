@@ -1,5 +1,5 @@
 <?php
-// Always start session once
+/* ---------- SESSION ---------- */
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
@@ -25,15 +25,17 @@ function isAdmin() {
     return isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'admin';
 }
 
+/* Require login for protected pages */
 function requireLogin() {
     if (!isLoggedIn()) {
-        redirect('../auth/login.php');
+        redirect(BASE_URL . '/auth/login.php');
     }
 }
 
+/* Require admin access */
 function requireAdmin() {
     if (!isAdmin()) {
-        redirect('../auth/login.php');
+        redirect(BASE_URL . '/auth/login.php');
     }
 }
 
@@ -49,7 +51,9 @@ function setAlert($message, $type = 'success') {
 function showAlert() {
     if (isset($_SESSION['alert'])) {
         $alert = $_SESSION['alert'];
-        echo "<div class='alert alert-{$alert['type']}'>{$alert['message']}</div>";
+        echo "<div class='alert alert-{$alert['type']}'>
+                {$alert['message']}
+              </div>";
         unset($_SESSION['alert']);
     }
 }
@@ -57,4 +61,3 @@ function showAlert() {
 function displayAlert() {
     showAlert();
 }
-?>
