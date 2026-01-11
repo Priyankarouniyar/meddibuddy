@@ -1,6 +1,6 @@
 <?php
 /**
- * MediBuddy Reminder Notification Cron Job
+ * MediBuddy Reminder Notification Cron Job (BACKUP VERSION)
  * 
  * This script runs automatically and sends notifications for medicine reminders
  * 
@@ -11,7 +11,7 @@
  */
 
 require_once '../config/database.php';
-require_once '../config/twilio.php';
+require_once '../includes/notification-engine.php';
 
 // Security: Check if this is a valid cron request
 $allowedIPs = ['127.0.0.1', 'localhost'];
@@ -21,6 +21,9 @@ $isCronRequest = php_sapi_name() === 'cli' || in_array($clientIP, $allowedIPs);
 if(!$isCronRequest && php_sapi_name() !== 'cli') {
     die("Error: This script can only be run from command line or localhost");
 }
+
+// Initialize notification engine
+$notificationEngine = new NotificationEngine($conn);
 
 // Get current time
 $currentTime = new DateTime();
@@ -50,9 +53,8 @@ $sql = "SELECT r.id as reminder_id, r.reminder_time, r.reminder_days,
                m.name as medicine_name, m.dosage, m.unit,
                fm.name as family_member_name,
                p.user_id,
-               u.email as user_email, u.phone as user_phone, u.name as user_name,
-               ns.email_enabled, ns.sms_enabled, ns.whatsapp_enabled, 
-               ns.sms_number, ns.notification_minutes_before,
+               u.email as user_email,
+               ns.email_enabled, ns.sms_enabled, ns.sms_number, ns.notification_minutes_before,
                s.name as status_name
         FROM reminders r
         JOIN prescription_medicine pm ON r.prescription_medicine_id = pm.id
@@ -78,9 +80,8 @@ $remindersSkipped = 0;
 while($reminder = mysqli_fetch_assoc($result)) {
     // Default notification settings if not found
     $emailEnabled = $reminder['email_enabled'] ?? 1;
-    $smsEnabled = $reminder['sms_enabled'] ?? 1;
-    $whatsappEnabled = $reminder['whatsapp_enabled'] ?? 1;
-    $userPhone = $reminder['user_phone'] ?? $reminder['sms_number'] ?? '';
+    $smsEnabled = $reminder['sms_enabled'] ?? 0;
+    $smsNumber = $reminder['sms_number'] ?? '';
     $minutesBefore = $reminder['notification_minutes_before'] ?? 15;
 
     // Extract reminder hour and minute
@@ -121,58 +122,49 @@ while($reminder = mysqli_fetch_assoc($result)) {
 
         writeLog("Processing reminder #{$reminder['reminder_id']}: {$reminder['medicine_name']} for {$reminder['family_member_name']}");
 
-        // Prepare notification channels based on user preferences
-        $channels = [];
-        if($emailEnabled) $channels[] = 'email';
-        if($smsEnabled && !empty($userPhone)) $channels[] = 'sms';
-        if($whatsappEnabled && !empty($userPhone)) $channels[] = 'whatsapp';
-
-        if(empty($channels)) {
-            writeLog("No notification channels enabled for user #{$reminder['user_id']}. Skipping.");
-            $remindersSkipped++;
-            continue;
-        }
-
-        // Send multi-channel medicine reminder using Twilio
-        $notificationResults = sendMedicineReminder(
-            $reminder['user_id'],
-            $userPhone,
-            $reminder['user_email'],
-            $reminder['medicine_name'],
-            $reminder['dosage'] . ' ' . $reminder['unit'],
-            $reminder['reminder_time']
-        );
-
-        // Process results and log
+        // Send notifications based on user preferences
         $sent = false;
-        foreach($notificationResults as $channel => $result) {
-            if($result['success']) {
-                writeLog("✓ {$channel} notification sent successfully");
-                
-                // Log successful notification to database
-                $logSql = "INSERT INTO notification_logs (reminder_id, user_id, channel, status, message, created_at) 
-                          VALUES ('{$reminder['reminder_id']}', '{$reminder['user_id']}', '$channel', 'sent', 
-                                  'Medicine reminder sent for {$reminder['medicine_name']}', NOW())";
-                mysqli_query($conn, $logSql);
-                
+
+        if($emailEnabled && !empty($reminder['user_email'])) {
+            $emailSent = $notificationEngine->sendEmailNotification(
+                $reminder['reminder_id'],
+                $reminder['user_id'],
+                $reminder['user_email'],
+                $reminder['medicine_name'],
+                $reminder['family_member_name'],
+                $reminder['dosage'],
+                $reminder['unit'],
+                $reminder['reminder_time']
+            );
+            
+            if($emailSent) {
+                writeLog("✓ Email sent to {$reminder['user_email']}");
                 $sent = true;
             } else {
-                writeLog("✗ {$channel} notification failed: " . $result['error']);
-                
-                // Log failed notification to database
-                $logSql = "INSERT INTO notification_logs (reminder_id, user_id, channel, status, message, created_at) 
-                          VALUES ('{$reminder['reminder_id']}', '{$reminder['user_id']}', '$channel', 'failed', 
-                                  'Error: {$result['error']}', NOW())";
-                mysqli_query($conn, $logSql);
+                writeLog("✗ Email failed for {$reminder['user_email']}");
+            }
+        }
+
+        if($smsEnabled && !empty($smsNumber)) {
+            $smsSent = $notificationEngine->sendSmsNotification(
+                $reminder['reminder_id'],
+                $reminder['user_id'],
+                $smsNumber,
+                $reminder['medicine_name'],
+                $reminder['family_member_name'],
+                $reminder['reminder_time']
+            );
+            
+            if($smsSent) {
+                writeLog("✓ SMS sent to $smsNumber");
+                $sent = true;
+            } else {
+                writeLog("✗ SMS failed for $smsNumber");
             }
         }
 
         if($sent) {
             $remindersSent++;
-            
-            // Update reminder last_sent timestamp
-            $updateSql = "UPDATE reminders SET last_sent = NOW() WHERE id = '{$reminder['reminder_id']}'";
-            mysqli_query($conn, $updateSql);
         }
     }
 }
