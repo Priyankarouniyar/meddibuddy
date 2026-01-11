@@ -23,4 +23,11 @@ if (!$conn) {
 }
 
 // Note: Functions like redirect, isLoggedIn, etc., are now in functions.php to avoid duplicates
+/* ---------- BASE URL (VERY IMPORTANT) ---------- */
+/*
+   Project URL:
+   http://localhost/medibuddy
+*/
+define('BASE_URL', '/medibuddy');
 ?>
+

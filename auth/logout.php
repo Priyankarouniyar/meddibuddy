@@ -1,15 +1,14 @@
 <?php
+session_start();
+
+require_once '../config/database.php';
 require_once '../includes/functions.php';
 
-// Clear all session data
-$_SESSION = array();
+/* Clear session data */
+$_SESSION = [];
 
-// Destroy the session
-if (session_status() !== PHP_SESSION_NONE) {
-    session_destroy();
-}
+/* Destroy session */
+session_destroy();
 
-// Use absolute URL with full medibuddy path
-header("Location: /medibuddy/auth/login.php");
-exit;
-?>
+/* Redirect to login page */
+redirect(BASE_URL . '/auth/login.php?logout=success');

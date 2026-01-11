@@ -41,7 +41,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <title>Login - MediBuddy</title>
     <link rel="stylesheet" href="../assets/css/style.css">
     <style>
-        .auth-page { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 1rem; }
+        .auth-page {
+             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
+             min-height: 100vh;
+              display: flex;
+               align-items: center;
+                justify-content: center;
+                padding: 1rem; }
         .auth-container { background: white; padding: 3rem; border-radius: 12px; box-shadow: 0 10px 40px rgba(0,0,0,0.2); max-width: 450px; width: 100%; }
         .auth-header { text-align: center; margin-bottom: 2rem; }
         .auth-header h2 { color: #667eea; font-size: 2rem; margin: 0 0 0.5rem 0; }
