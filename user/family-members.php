@@ -15,24 +15,22 @@ $error = '';
 // =========================
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
     $action = $_POST['action'];
-    $name = sanitize($_POST['name']);
-    $gender_id = intval($_POST['gender_id']);
-    $dob = $_POST['dob'];
-    $relationship_id = intval($_POST['relationship_id']);
-    $medical_conditions = sanitize($_POST['medical_conditions']);
-    $allergies = sanitize($_POST['allergies']);
-    $phone = sanitize($_POST['phone']);
-
-    $emergency_contact_name = sanitize($_POST['emergency_contact_name']);
-    $emergency_contact_phone = sanitize($_POST['emergency_contact_phone']);
-    $emergency_contact_relationship = sanitize($_POST['emergency_contact_relationship']);
-    $emergency_doctor_name = sanitize($_POST['emergency_doctor_name']);
-    $emergency_doctor_phone = sanitize($_POST['emergency_doctor_phone']);
-    $doctor_specialization = sanitize($_POST['doctor_specialization']);
-    $emergency_hospital_name = sanitize($_POST['emergency_hospital_name']);
-    $emergency_hospital_address = sanitize($_POST['emergency_hospital_address']);
-    $emergency_hospital_phone = sanitize($_POST['emergency_hospital_phone']);
-
+    $name = isset($_POST['name']) ? sanitize($_POST['name']) : '';
+    $gender_id = isset($_POST['gender_id']) ? intval($_POST['gender_id']) : 0;
+    $dob = isset($_POST['dob']) ? $_POST['dob'] : '';
+    $relationship_id = isset($_POST['relationship_id']) ? intval($_POST['relationship_id']) : 0;
+    $medical_conditions = isset($_POST['medical_conditions']) ? sanitize($_POST['medical_conditions']) : '';
+    $allergies = isset($_POST['allergies']) ? sanitize($_POST['allergies']) : '';
+    $phone = isset($_POST['phone']) ? sanitize($_POST['phone']) : '';
+    $emergency_contact_name = isset($_POST['emergency_contact_name']) ? sanitize($_POST['emergency_contact_name']) : '';
+     $emergency_contact_phone = isset($_POST['emergency_contact_phone']) ? sanitize($_POST['emergency_contact_phone']) : '';
+     $emergency_contact_relationship = isset($_POST['emergency_contact_relationship']) ? sanitize($_POST['emergency_contact_relationship']) : '';
+     $emergency_doctor_name = isset($_POST['emergency_doctor_name']) ? sanitize($_POST['emergency_doctor_name']) : '';
+     $emergency_doctor_phone = isset($_POST['emergency_doctor_phone']) ? sanitize($_POST['emergency_doctor_phone']) : '';
+     $doctor_specialization = isset($_POST['doctor_specialization']) ? sanitize($_POST['doctor_specialization']) : '';
+     $emergency_hospital_name = isset($_POST['emergency_hospital_name']) ? sanitize($_POST['emergency_hospital_name']) : '';
+     $emergency_hospital_address = isset($_POST['emergency_hospital_address']) ? sanitize($_POST['emergency_hospital_address']) : '';
+     $emergency_hospital_phone = isset($_POST['emergency_hospital_phone']) ? sanitize($_POST['emergency_hospital_phone']) : '';
     if ($action === 'add' || $action === 'edit') {
         if (empty($name) || !$gender_id || !$relationship_id) {
             $error = "Please fill all required fields.";

@@ -2,7 +2,7 @@
 require_once '../config/database.php';
 require_once '../includes/functions.php';
 
-requireAdmin();
+requireAdmin(); // Only admin can access
 
 $success = '';
 $error = '';
@@ -16,162 +16,159 @@ if($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['a
     $description = sanitize($_POST['description']);
 
     if(empty($name) || !$medicine_type_id) {
-        $error = "Please fill in required fields.";
+        $error = "Please fill required fields.";
     } else {
-        $sql = "INSERT INTO medicines (name, generic_name, medicine_type_id, manufacturer_id, description) 
-                VALUES ('$name', '$generic_name', '$medicine_type_id', '$manufacturer_id', '$description')";
+        $sql = "INSERT INTO medicines 
+                (name, generic_name, medicine_type_id, manufacturer_id, description, is_verified) 
+                VALUES ('$name', '$generic_name', '$medicine_type_id', '$manufacturer_id', '$description', 0)";
         if(mysqli_query($conn, $sql)) {
-            $success = "Medicine added successfully!";
+            $success = "Medicine added successfully! Pending verification.";
         } else {
-            $error = "Error adding medicine.";
+            $error = "Error adding medicine: ".mysqli_error($conn);
         }
     }
 }
 
-// Handle Delete Medicine
-if(isset($_GET['delete']) && isset($_GET['id'])) {
-    $medicine_id = intval($_GET['id']);
-    $sql = "DELETE FROM medicines WHERE id='$medicine_id'";
-    if(mysqli_query($conn, $sql)) {
-        $success = "Medicine deleted!";
-    } else {
-        $error = "Error deleting medicine.";
-    }
-}
-
 // Fetch medicine types
-$types = mysqli_query($conn, "SELECT * FROM medicine_types ORDER BY name");
 $types_array = [];
-while($t = mysqli_fetch_assoc($types)) {
-    $types_array[$t['id']] = $t['name'];
-}
+$types = mysqli_query($conn, "SELECT * FROM medicine_types ORDER BY name");
+while($t = mysqli_fetch_assoc($types)) $types_array[$t['id']] = $t['name'];
 
 // Fetch manufacturers
-$manufacturers = mysqli_query($conn, "SELECT * FROM manufacturers ORDER BY name");
 $manufacturers_array = [];
-while($m = mysqli_fetch_assoc($manufacturers)) {
-    $manufacturers_array[$m['id']] = $m['name'];
-}
+$manufacturers = mysqli_query($conn, "SELECT * FROM manufacturers ORDER BY name");
+while($m = mysqli_fetch_assoc($manufacturers)) $manufacturers_array[$m['id']] = $m['name'];
 
-// Fetch medicines
-$medicines = mysqli_query($conn, "SELECT m.*, mt.name as type_name, mf.name as manufacturer_name FROM medicines m LEFT JOIN medicine_types mt ON m.medicine_type_id=mt.id LEFT JOIN manufacturers mf ON m.manufacturer_id=mf.id ORDER BY m.name");
+// Fetch all medicines
+$medicines = mysqli_query($conn, "
+    SELECT m.*, mt.name as type_name, mf.name as manufacturer_name
+    FROM medicines m
+    LEFT JOIN medicine_types mt ON m.medicine_type_id=mt.id
+    LEFT JOIN manufacturers mf ON m.manufacturer_id=mf.id
+    ORDER BY m.created_at DESC
+");
 ?>
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Manage Medicines - MediBuddy</title>
-    <link rel="stylesheet" href="../assets/css/style.css">
-    <style>
-        .form-group { margin-bottom: 1rem; }
-        .form-group label { display: block; margin-bottom: 0.5rem; font-weight: bold; }
-        .form-group input, .form-group select, .form-group textarea { width: 100%; padding: 0.75rem; border: 1px solid #ddd; border-radius: 4px; }
-        .medicine-table { width: 100%; border-collapse: collapse; margin-top: 1rem; }
-        .medicine-table th, .medicine-table td { padding: 0.8rem; text-align: left; border-bottom: 1px solid #eee; }
-        .medicine-table th { background: #f5f5f5; font-weight: bold; border-bottom: 2px solid #ddd; }
-        .medicine-table tbody tr:hover { background: #f9f9f9; }
-    </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Manage Medicines - MediBuddy</title>
+<link rel="stylesheet" href="../assets/css/style.css">
+<style>
+body{font-family:Arial,sans-serif;background:#f4f4f9;padding:20px;}
+.container{max-width:1200px;margin:auto;}
+h2{margin-bottom:1rem;}
+.add-btn{padding:12px 24px;background:linear-gradient(135deg,#667eea,#764ba2);color:white;border:none;border-radius:8px;font-weight:bold;cursor:pointer;margin-bottom:20px;}
+.add-btn:hover{transform:translateY(-2px);}
+.card{background:white;padding:20px;border-radius:12px;box-shadow:0 5px 15px rgba(0,0,0,0.1);transition:transform 0.3s; margin-bottom:20px;}
+.card:hover{transform:translateY(-5px);}
+.card-title{font-weight:bold;font-size:18px;color:#333;margin-bottom:8px;}
+.card-subtitle{color:#667eea;font-weight:600;margin-bottom:12px;}
+.card-info{font-size:14px;color:#666;margin-bottom:8px;line-height:1.6;}
+.card-info strong{color:#333;}
+.card-actions{display:flex;gap:8px;margin-top:15px;}
+.btn-action{flex:1;padding:8px;border:none;border-radius:6px;cursor:pointer;font-weight:bold;color:white;transition:opacity 0.3s;}
+.btn-verify{background:#4caf50;}
+.btn-delete{background:#e74c3c;}
+.btn-action:hover{opacity:0.85;}
+.alert{padding:15px;border-radius:8px;margin-bottom:20px;}
+.alert-success{background:#d4edda;color:#155724;border:1px solid #c3e6cb;}
+.alert-error{background:#f8d7da;color:#721c24;border:1px solid #f5c6cb;}
+.modal{display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:1000;justify-content:center;align-items:center;}
+.modal.active{display:flex;}
+.modal-content{background:white;padding:30px;border-radius:12px;width:90%;max-width:600px;max-height:60vh;overflow-y:auto;box-shadow:0 10px 40px rgba(0,0,0,0.2);}
+.modal-header{margin-bottom:20px;display:flex;justify-content:space-between;align-items:center;}
+.close-btn{background:none;border:none;font-size:28px;cursor:pointer;color:#666;}
+.form-group{margin-bottom:15px;}
+.form-group label{display:block;margin-bottom:5px;color:#333;font-weight:500;}
+.form-group input, .form-group select, .form-group textarea{width:100%;padding:10px;border:1px solid #ddd;border-radius:6px;font-size:14px;}
+.form-actions{display:flex;gap:10px;margin-top:20px;}
+.btn-submit{flex:1;padding:12px;background:#667eea;color:white;border:none;border-radius:6px;cursor:pointer;font-weight:bold;}
+.btn-cancel{flex:1;padding:12px;background:#ddd;color:#333;border:none;border-radius:6px;cursor:pointer;}
+</style>
 </head>
 <body>
-<?php require_once '../includes/header.php'; ?>
+<?php include '../includes/header.php'; ?>
 
-<main class="main-content">
-    <h2>Manage Medicines</h2>
-    
-    <?php 
-    if($success) echo "<div class='alert alert-success'>$success</div>";
-    if($error) echo "<div class='alert alert-danger'>$error</div>";
-    ?>
+<div class="container">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
+        <h2>Manage Medicines</h2>
+        <button class="add-btn" onclick="openModal()">+ Add Medicine</button>
+    </div>
 
-    <!-- Add Medicine Form -->
-    <div class="card" style="margin-bottom: 2rem;">
-        <h3>Add New Medicine</h3>
+    <?php if($success): ?><div class="alert alert-success"><?= htmlspecialchars($success) ?></div><?php endif; ?>
+    <?php if($error): ?><div class="alert alert-error"><?= htmlspecialchars($error) ?></div><?php endif; ?>
+
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:20px;">
+        <?php while($med=mysqli_fetch_assoc($medicines)): ?>
+        <div class="card">
+            <div class="card-title"><?= htmlspecialchars($med['name']) ?></div>
+            <div class="card-subtitle"><?= htmlspecialchars($med['type_name'] ?? '-') ?> | <?= htmlspecialchars($med['manufacturer_name'] ?? '-') ?></div>
+            <div class="card-info"><strong>Generic:</strong> <?= htmlspecialchars($med['generic_name'] ?: '-') ?></div>
+            <div class="card-info"><strong>Description:</strong> <?= htmlspecialchars($med['description'] ?: '-') ?></div>
+            <div class="card-info"><strong>Status:</strong> <?= $med['is_verified'] ? 'Verified' : 'Pending' ?></div>
+            <div class="card-actions">
+                <a href="verify-medicines.php" class="btn-action btn-verify">Verify</a>
+            </div>
+        </div>
+        <?php endwhile; ?>
+    </div>
+</div>
+
+<!-- Add Medicine Modal -->
+<div id="medicineModal" class="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2>Add New Medicine</h2>
+            <button class="close-btn" onclick="closeModal()">&times;</button>
+        </div>
         <form method="POST">
             <input type="hidden" name="action" value="add">
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
-                <div class="form-group">
-                    <label>Medicine Name *</label>
-                    <input type="text" name="name" placeholder="e.g., Aspirin 500mg" required>
-                </div>
-                <div class="form-group">
-                    <label>Generic Name</label>
-                    <input type="text" name="generic_name" placeholder="e.g., Acetylsalicylic Acid">
-                </div>
+            <div class="form-group">
+                <label>Medicine Name *</label>
+                <input type="text" name="name" required>
             </div>
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
-                <div class="form-group">
-                    <label>Medicine Type *</label>
-                    <select name="medicine_type_id" required>
-                        <option value="">Select Type</option>
-                        <?php foreach($types_array as $id => $name): ?>
-                            <option value="<?= $id ?>"><?= htmlspecialchars($name) ?></option>
-                        <?php endforeach; ?>
-                    </select>
-                </div>
-                <div class="form-group">
-                    <label>Manufacturer</label>
-                    <select name="manufacturer_id">
-                        <option value="">Select Manufacturer</option>
-                        <?php foreach($manufacturers_array as $id => $name): ?>
-                            <option value="<?= $id ?>"><?= htmlspecialchars($name) ?></option>
-                        <?php endforeach; ?>
-                    </select>
-                </div>
+            <div class="form-group">
+                <label>Generic Name</label>
+                <input type="text" name="generic_name">
+            </div>
+            <div class="form-group">
+                <label>Medicine Type *</label>
+                <select name="medicine_type_id" required>
+                    <option value="">Select Type</option>
+                    <?php foreach($types_array as $id=>$name): ?>
+                        <option value="<?= $id ?>"><?= htmlspecialchars($name) ?></option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Manufacturer</label>
+                <select name="manufacturer_id">
+                    <option value="">Select Manufacturer</option>
+                    <?php foreach($manufacturers_array as $id=>$name): ?>
+                        <option value="<?= $id ?>"><?= htmlspecialchars($name) ?></option>
+                    <?php endforeach; ?>
+                </select>
             </div>
             <div class="form-group">
                 <label>Description</label>
-                <textarea name="description" placeholder="Medicine description or usage" rows="3"></textarea>
+                <textarea name="description" rows="3"></textarea>
             </div>
-            <button type="submit" class="btn btn-primary">Add Medicine</button>
+            <div class="form-actions">
+                <button type="submit" class="btn-submit">Add Medicine</button>
+                <button type="button" class="btn-cancel" onclick="closeModal()">Cancel</button>
+            </div>
         </form>
     </div>
+</div>
 
-    <!-- Medicines List -->
-    <h3>All Medicines</h3>
-    <div class="card">
-        <?php 
-        if(mysqli_num_rows($medicines) === 0):
-        ?>
-            <p>No medicines added yet.</p>
-        <?php 
-        else:
-        ?>
-            <table class="medicine-table">
-                <thead>
-                    <tr>
-                        <th>Medicine Name</th>
-                        <th>Generic Name</th>
-                        <th>Type</th>
-                        <th>Manufacturer</th>
-                        <th>Status</th>
-                        <th>Action</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <?php while($medicine = mysqli_fetch_assoc($medicines)): ?>
-                    <tr>
-                        <td><?= htmlspecialchars($medicine['name']) ?></td>
-                        <td><?= htmlspecialchars($medicine['generic_name'] ?? '-') ?></td>
-                        <td><?= htmlspecialchars($medicine['type_name'] ?? '-') ?></td>
-                        <td><?= htmlspecialchars($medicine['manufacturer_name'] ?? '-') ?></td>
-                        <td>
-                            <span style="background: <?= $medicine['is_active'] ? '#e8f5e9' : '#ffebee' ?>; color: <?= $medicine['is_active'] ? '#2e7d32' : '#c62828' ?>; padding: 0.3rem 0.8rem; border-radius: 20px; font-size: 0.85rem;">
-                                <?= $medicine['is_active'] ? 'Active' : 'Inactive' ?>
-                            </span>
-                        </td>
-                        <td>
-                            <a href="?delete=1&id=<?= $medicine['id'] ?>" class="btn btn-sm" style="background: #dc3545; color: white; padding: 0.3rem 0.6rem; font-size: 0.8rem;" onclick="return confirm('Delete this medicine?')">Delete</a>
-                        </td>
-                    </tr>
-                    <?php endwhile; ?>
-                </tbody>
-            </table>
-        <?php endif; ?>
-    </div>
-
-</main>
-
-<?php require_once '../includes/footer.php'; ?>
+<script>
+function openModal(){document.getElementById('medicineModal').classList.add('active');}
+function closeModal(){document.getElementById('medicineModal').classList.remove('active');}
+// Close modal on outside click
+window.onclick=function(e){if(e.target==document.getElementById('medicineModal'))closeModal();}
+</script>
 </body>
 </html>
