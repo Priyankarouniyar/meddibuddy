@@ -12,6 +12,13 @@
 
 require_once '../config/database.php';
 require_once '../config/twilio.php';
+require '../vendor/PHPMailer/PHPMailer.php';
+require '../vendor/PHPMailer/SMTP.php';
+require '../vendor/PHPMailer/Exception.php';
+
+use PHPMailer\PHPMailer\PHPMailer;
+use PHPMailer\PHPMailer\SMTP;
+use PHPMailer\PHPMailer\Exception;
 
 // Security: Check if this is a valid cron request
 $allowedIPs = ['127.0.0.1', 'localhost'];
@@ -190,5 +197,63 @@ if(php_sapi_name() === 'cli') {
         'reminders_skipped' => $remindersSkipped,
         'timestamp' => date('Y-m-d H:i:s')
     ]);
+}
+
+/**
+ * Send medicine reminder via email using PHPMailer
+ */
+function sendEmailReminder($toEmail, $subject, $body) {
+    $mail = new PHPMailer(true);
+
+    try {
+        // Server settings
+        $mail->isSMTP();
+        $mail->Host = 'smtp.example.com'; // Replace with your SMTP server
+        $mail->SMTPAuth = true;
+        $mail->Username = 'your_email@example.com'; // Replace with your email
+        $mail->Password = 'your_password'; // Replace with your email password
+        $mail->SMTPSecure = PHPMailer::ENCRYPTION_STARTTLS;
+        $mail->Port = 587;
+
+        // Recipients
+        $mail->setFrom('your_email@example.com', 'MediBuddy');
+        $mail->addAddress($toEmail);
+
+        // Content
+        $mail->isHTML(true);
+        $mail->Subject = $subject;
+        $mail->Body = $body;
+
+        $mail->send();
+        return ['success' => true];
+    } catch (Exception $e) {
+        return ['success' => false, 'error' => $mail->ErrorInfo];
+    }
+}
+
+// Update sendMedicineReminder to include email handling
+function sendMedicineReminder($userId, $userPhone, $userEmail, $medicineName, $dosage, $reminderTime) {
+    $results = [];
+
+    // Email Notification
+    if (!empty($userEmail)) {
+        $emailSubject = "Medicine Reminder: $medicineName";
+        $emailBody = "<p>Dear User,</p>
+                      <p>This is a reminder to take your medicine:</p>
+                      <ul>
+                          <li><strong>Medicine:</strong> $medicineName</li>
+                          <li><strong>Dosage:</strong> $dosage</li>
+                          <li><strong>Time:</strong> $reminderTime</li>
+                      </ul>
+                      <p>Stay healthy,</p>
+                      <p>MediBuddy Team</p>";
+
+        $results['email'] = sendEmailReminder($userEmail, $emailSubject, $emailBody);
+    }
+
+    // SMS and WhatsApp logic remains unchanged
+    // ...existing code...
+
+    return $results;
 }
 ?>
